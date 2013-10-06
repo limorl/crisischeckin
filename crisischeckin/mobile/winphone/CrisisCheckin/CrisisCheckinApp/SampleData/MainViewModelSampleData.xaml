@@ -4,9 +4,9 @@
     xmlns:vm="clr-namespace:CrisisCheckinApp.ViewModels"
     SampleProperty="Sample Text Property Value">
 
-    <vm:MainViewModel.Items>
-        <vm:ItemViewModel LineOne="Earthquake in China" LineTwo="Aug 2013" LineThree="Maecenas praesent accumsan bibendum dictumst eleifend facilisi faucibus habitant inceptos interdum lobortis nascetur"/>
-        <vm:ItemViewModel LineOne="Flood in Colorado" LineTwo="Sep 2012" LineThree="Pharetra placerat pulvinar sagittis senectus sociosqu suscipit torquent ultrices vehicula volutpat maecenas praesent"/>
-    </vm:MainViewModel.Items>
+    <vm:MainViewModel.OngoingDisasters>
+        <vm:DisasterViewModel DisasterName="Hurican in Miami"/>
+        <vm:DisasterViewModel DisasterName="Tornado in Cuba"/>
+    </vm:MainViewModel.OngoingDisasters>
 
 </vm:MainViewModel>

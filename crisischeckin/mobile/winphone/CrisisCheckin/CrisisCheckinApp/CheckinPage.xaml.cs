@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Navigation;
 using Microsoft.Phone.Controls;
 using Microsoft.Phone.Shell;
+using CrisisCheckinApp.ServiceClient;
 
 namespace CrisisCheckinApp
 {
@@ -15,17 +16,27 @@ namespace CrisisCheckinApp
         public CheckinPage()
         {
             InitializeComponent();
-            
+
+            DataContext = App.CheckinViewModel;            
         }
 
-        private void CheckinPage_Loaded(object sender, RoutedEventArgs e)
+        protected override void OnNavigatedTo(NavigationEventArgs e)
         {
-            this.disasterName.Text = MainPage.CurrDisaster.Name;
+            base.OnNavigatedTo(e);
 
+            string disasterId = string.Empty;
+
+            if (NavigationContext.QueryString.TryGetValue("did", out disasterId) && App.OngoingDisasters != null)
+            {
+                App.CheckinViewModel.Disaster = App.OngoingDisasters.FirstOrDefault(d => d.Id == disasterId);
+            }
+
+            // TODO: handle error
         }
 
         private void checkinOk_Click(object sender, RoutedEventArgs e)
         {
+            // TODO: checkin
             NavigationService.Navigate(new Uri("/MainPage.xaml", UriKind.Relative));
 
         }

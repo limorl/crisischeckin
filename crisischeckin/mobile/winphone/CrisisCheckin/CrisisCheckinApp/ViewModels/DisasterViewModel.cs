@@ -28,7 +28,28 @@ namespace CrisisCheckinApp.ViewModels
                NotifyPropertyChanged("Disaster");
             }
         }
-               public event PropertyChangedEventHandler PropertyChanged;
+
+        /// <summary>
+        /// Sample ViewModel property; this property is used in the view to display its value using a Binding.
+        /// </summary>
+        /// <returns></returns>
+        public string DisasterName
+        {
+            get
+            {
+                return disaster.Name;
+            }
+            set
+            {
+                if (value != disaster.Name)
+                {
+                    disaster.Name = value;
+                    NotifyPropertyChanged("DisasterName");
+                }
+            }
+        }
+        public event PropertyChangedEventHandler PropertyChanged;
+
         private void NotifyPropertyChanged(String propertyName)
         {
             PropertyChangedEventHandler handler = PropertyChanged;

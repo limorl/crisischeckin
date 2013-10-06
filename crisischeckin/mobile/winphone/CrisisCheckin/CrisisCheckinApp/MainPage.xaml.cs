@@ -14,58 +14,32 @@ namespace CrisisCheckinApp
 {
     public partial class MainPage : PhoneApplicationPage
     {
-        public static Disaster CurrDisaster;
-
         // Constructor
         public MainPage()
         {
             InitializeComponent();
 
-            // Set the data context of the listbox control to the sample data
-            DataContext = App.ViewModel;
+            DataContext = App.MainViewModel;
         }
 
         // Load data for the ViewModel Items
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
-            if (!App.ViewModel.IsDataLoaded)
+            if (!App.MainViewModel.IsDataLoaded)
             {
-                App.ViewModel.LoadData();
+                App.MainViewModel.LoadData();
             }
         }
-
-        private void TextBlock_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-        {
-
-        }
-
-        private void Disaster_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-        {
-            // open new checkin page
-            NavigationService.Navigate(new Uri("/CheckinPage.xaml", UriKind.Relative));
-
-
-        }
-
-        private void LongListSelector_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
-        {
-
-        }
-
-        private void OngoingDisasters_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
-        {
-            // open new checkin page
-            
-            
-
-
-        }
-
+       
         private void OngoingDisaster_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
         {
-            CurrDisaster = ((sender as TextBlock).DataContext as DisasterViewModel).Disaster;
-            NavigationService.Navigate(new Uri("/CheckinPage.xaml", UriKind.Relative));
+            var selectedDisaster = ((sender as TextBlock).DataContext as DisasterViewModel).Disaster;
+
+            // checkin URI should include the disaster id and disaster name
+            var uri = string.Format("/CheckinPage.xaml?did={0}&dname={1}", selectedDisaster.Id, selectedDisaster.Name); 
+            NavigationService.Navigate(new Uri(uri, UriKind.Relative));
 
         }
+
     }
 }

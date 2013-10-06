@@ -10,29 +10,70 @@ using Microsoft.Phone.Controls;
 using Microsoft.Phone.Shell;
 using CrisisCheckinApp.Resources;
 using CrisisCheckinApp.ViewModels;
+using System.Net;
+using CrisisCheckinApp.ServiceClient;
+using System.IO.IsolatedStorage;
+using System.Threading;
 
 namespace CrisisCheckinApp
 {
     public partial class App : Application
     {
-        private static MainViewModel viewModel = null;
+        private Mutex isoSettingsMutex = new Mutex(false, AppSettings.IsoSettingsMutexName);
+        public ICrisisCheckinService checkinClient { get; private set; }
+
+        public ManualResetEvent UserDataLoaded = new ManualResetEvent(false);
+
+        # region App State
+
+        public static bool IsSignedIn { get; private set; } 
+        public static UserProfile UserProfile { get ; private set; }
+        public static UserCredentials UserCredentials { get; private set; }
+        public static IEnumerable<string> Clusters { get; private set; }
+        public static IEnumerable<Disaster> OngoingDisasters { get; private set; }
+
+        #endregion 
+
+        #region View Models
+
+        private static MainViewModel mainViewModel = null;
 
         /// <summary>
         /// A static ViewModel used by the views to bind against.
         /// </summary>
         /// <returns>The MainViewModel object.</returns>
-        public static MainViewModel ViewModel
+        public static MainViewModel MainViewModel
         {
             get
             {
                 // Delay creation of the view model until necessary
-                if (viewModel == null)
-                    viewModel = new MainViewModel();
+                if (mainViewModel == null)
+                    mainViewModel = new MainViewModel();
 
-                return viewModel;
+                return mainViewModel;
             }
         }
 
+        private static CheckinViewModel checkiViewModel = null;
+
+        /// <summary>
+        /// A static ViewModel used by the views to bind against.
+        /// </summary>
+        /// <returns>The MainViewModel object.</returns>
+        public static CheckinViewModel CheckinViewModel
+        {
+            get
+            {
+                // Delay creation of the view model until necessary
+                if (checkiViewModel == null)
+                    checkiViewModel = new CheckinViewModel();
+
+                return checkiViewModel;
+            }
+        }
+
+        #endregion
+ 
         /// <summary>
         /// Provides easy access to the root frame of the Phone Application.
         /// </summary>
@@ -47,6 +88,10 @@ namespace CrisisCheckinApp
             // Global handler for uncaught exceptions.
             UnhandledException += Application_UnhandledException;
 
+            App.OngoingDisasters = new List<Disaster>{};
+
+            this.checkinClient = new CrisisCheckinServiceClient();
+            
             // Standard XAML initialization
             InitializeComponent();
 
@@ -82,17 +127,14 @@ namespace CrisisCheckinApp
         // This code will not execute when the application is reactivated
         private void Application_Launching(object sender, LaunchingEventArgs e)
         {
+            InitializeApp();
         }
 
         // Code to execute when the application is activated (brought to foreground)
         // This code will not execute when the application is first launched
         private void Application_Activated(object sender, ActivatedEventArgs e)
         {
-            // Ensure that application state is restored appropriately
-            if (!App.ViewModel.IsDataLoaded)
-            {
-                App.ViewModel.LoadData();
-            }
+            InitializeApp();
         }
 
         // Code to execute when the application is deactivated (sent to background)
@@ -128,6 +170,16 @@ namespace CrisisCheckinApp
             }
         }
 
+        private void InitializeApp()
+        {
+            LoadState();
+            BeginUpdateDisasters();
+            // Ensure that application state is restored appropriately
+            if (!App.MainViewModel.IsDataLoaded)
+            {
+                App.MainViewModel.LoadData();
+            }
+        }
         #region Phone application initialization
 
         // Avoid double-initialization
@@ -189,6 +241,73 @@ namespace CrisisCheckinApp
             }
         }
 
+        private void LoadState()
+        {
+            if (isoSettingsMutex.WaitOne(AppSettings.MutexWaitTimeout))
+            {
+                try
+                {
+                    // Load the IsSignedIn flag
+                    bool isSignedIn = false;
+                    App.IsSignedIn = isSignedIn;
+                    if (IsolatedStorageSettings.ApplicationSettings.TryGetValue<bool>(AppSettings.IsSignedInKey, out isSignedIn))
+                    {
+                        App.IsSignedIn = isSignedIn;
+                    }
+
+                    // Load the IsSignedIn flag
+                    UserCredentials creds = null;
+                    if (IsolatedStorageSettings.ApplicationSettings.TryGetValue<UserCredentials>(AppSettings.UserCredentialsKey, out creds))
+                    {
+                        App.UserCredentials = creds;
+                    }
+
+                    // Load the user profile
+                    UserProfile user = null;
+                    IsolatedStorageSettings.ApplicationSettings.TryGetValue<UserProfile>(AppSettings.UserProfileKey, out user);
+                    UserProfile = user;
+
+                    // Load Disasters 
+                    IEnumerable<Disaster> disasters = null;
+                    IsolatedStorageSettings.ApplicationSettings.TryGetValue<IEnumerable<Disaster>>(AppSettings.DisastersKey, out disasters);
+                       OngoingDisasters = disasters;
+                }
+                finally
+                {
+                    isoSettingsMutex.ReleaseMutex();
+                }
+            }
+            else
+            {
+                // TODO: output error to logger/
+                // Throw exception and exit as we have nothing to do...
+                throw new TimeoutException("Waiting for application settings mutex timed out");
+            }
+        }
+
+        private void StoreState()
+        {
+            if (isoSettingsMutex.WaitOne(AppSettings.MutexWaitTimeout))
+            {
+                try
+                {
+                    IsolatedStorageSettings.ApplicationSettings[AppSettings.IsSignedInKey] = IsSignedIn;
+                    IsolatedStorageSettings.ApplicationSettings[AppSettings.UserProfileKey] = UserProfile;
+                    IsolatedStorageSettings.ApplicationSettings[AppSettings.UserCredentialsKey] = UserCredentials;
+                    IsolatedStorageSettings.ApplicationSettings[AppSettings.DisastersKey] = OngoingDisasters;
+                    IsolatedStorageSettings.ApplicationSettings.Save();
+                }
+                finally
+                {
+                    isoSettingsMutex.ReleaseMutex();
+                }
+            }
+            else
+            {
+                // TODO: output error to logger/
+            }
+        }
+
         #endregion
 
         // Initialize the app's font and flow direction as defined in its localized resource strings.
@@ -246,5 +365,52 @@ namespace CrisisCheckinApp
                 throw;
             }
         }
+
+        
+        #region Service Requests
+
+        public void BeginSignin(UserCredentials credentials)
+        {
+            // TODO: add service calls for autentication if needed
+            try
+            {
+                if (!IsSignedIn || App.UserProfile == null)
+                {
+                    checkinClient.SigninAsync(credentials, Signin_Completed);
+                }
+            }
+            catch (Exception)
+            {
+                UserDataLoaded.Set();
+            }
+        }
+
+        public void Signin_Completed(ServiceResponseStatus status, UserProfile user)
+        {
+            if (status != null && status.IsSuccess)
+            {
+                App.UserProfile = user;
+                IsSignedIn = true;
+                UserDataLoaded.Set();
+            }
+        }
+
+        private void BeginUpdateDisasters()
+        {
+            if (App.OngoingDisasters == null)
+            {
+                checkinClient.GetDisastersAsync(null, GetDisasters_Completed);
+            }
+        }
+
+        public void  GetDisasters_Completed(ServiceResponseStatus status, IEnumerable<Disaster> disasters)
+        {
+            if (status != null && status.IsSuccess)
+            {
+                App.OngoingDisasters = disasters;
+            }
+        }
+
+        #endregion
     }
 }
